@@ -3,56 +3,33 @@ package ibf2022.paf.assessment.server.repositories;
 // TODO: Task 3
 
 import java.util.Optional;
-import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+
 import ibf2022.paf.assessment.server.models.User;
 
 @Repository
 public class UserRepository {
 
     @Autowired
-    JdbcTemplate template;
+    private JdbcTemplate jdbcTemplate;
 
-    private final String GET_USER_SQL = "select * from user where username = ?";
-
-    private final String INSERT_USER_SQL = "insert into user (user_id,username,name) values (?,?,?)";
-
-    public Optional<User> findUserByUsername (String username){
-
-        User user;
-
-        try{
-            user = template.queryForObject(GET_USER_SQL, BeanPropertyRowMapper.newInstance(User.class), username);
-        } catch(EmptyResultDataAccessException e){
-            //e.printStackTrace();
-            return Optional.empty();
-        }
-
-        return Optional.of(user);
-
+    public String insertUser(User user) {
+        String INSERT_USER_SQL = "insert into user (username, name) values (?, ?)";
+        jdbcTemplate.update(INSERT_USER_SQL, user.getUsername(), user.getName());
+        return findUserByUsername(user.getUsername()).get().getUserId();
     }
 
-    public String insertUser (User user){
-
-        String uuid = UUID.randomUUID().toString().substring(0, 8);
-
-        Integer added = template.update(INSERT_USER_SQL, uuid,user.getUsername(),user.getName());
-
-        if(added==1){
-            return uuid;
-        } else{
-            return "Insertion failed";
-        }
-
+    public Optional<User> findUserByUsername(String username) {
+        String SELECT_USER_SQL = "select user_id, username, name from user where username = ?";
+        return jdbcTemplate.query(SELECT_USER_SQL, (rs, rowNum) -> {
+            User user = new User();
+            user.setUserId(rs.getString("user_id"));
+            user.setUsername(rs.getString("username"));
+            user.setName(rs.getString("name"));
+            return user;
+        }, username).stream().findFirst();
     }
-
-
-
-
-
 }

@@ -1,93 +1,69 @@
 package ibf2022.paf.assessment.server.controllers;
 
-import java.util.ArrayList;
-import java.util.Date;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatusCode;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.servlet.ModelAndView;
 
 import ibf2022.paf.assessment.server.models.Task;
-import ibf2022.paf.assessment.server.repositories.TaskRepository;
+import ibf2022.paf.assessment.server.models.User;
+import ibf2022.paf.assessment.server.repositories.UserRepository;
 import ibf2022.paf.assessment.server.services.TodoService;
 
-// TODO: Task 4 and Task 8
+// TODO: Task 4, Task 8
 
 @Controller
 public class TasksController {
 
     @Autowired
-    TaskRepository taskRepo;
+    private UserRepository userRepo;
 
     @Autowired
-    TodoService todoService;
+    private TodoService todoSvc;
 
-    @PostMapping("/task")
-    public ModelAndView saveTask(@RequestParam MultiValueMap<String,String> form) throws ParseException{
+    @PostMapping(path="/task")
+    public ModelAndView processSave(@RequestBody String payload) throws ParseException {
 
-        Iterator<String> it = form.keySet().iterator();
+        Boolean bContinue = true;
+        Boolean bUpserted = false;
 
-        String usernamekey = it.next();
-        String username = form.getFirst(usernamekey);
-        System.out.println(username);
+        Map<String, String> taskMap = Task.parseResultMap(payload);
 
-        List<Task> taskList = new ArrayList<>();
-        Integer counter = 0;
+        Integer num = (int) taskMap.keySet().stream().filter(t -> t.startsWith("description-")).count();
 
-        Task inputTask = new Task();
+        String username = taskMap.get("username");
 
-        while(it.hasNext()){
+        if (username.contains(" "))
+            bContinue = false;
 
-            counter++;
-            String key = it.next();
-            System.out.println(counter);
-            System.out.println("key:" + key);
-            System.out.println("data:" + form.getFirst(key));
-
-            if(counter ==1){
-                inputTask.setDescription(form.getFirst(key));
-            }
-            if(counter ==2){
-                inputTask.setPriority(Integer.parseInt(form.getFirst(key)));
-            }
-            if(counter ==3){
-                counter = 0;
-                Date date1= new SimpleDateFormat("yyyy-MM-dd").parse(form.getFirst(key));
-                inputTask.setDueDate(date1);
-                System.out.println(inputTask.toString());
-                taskList.add(inputTask);
-
-                //taskRepo.insertTask(inputTask,"1b80114c");
-                
-                inputTask = new Task();
+        if (bContinue) {
+            Optional<User> opt = userRepo.findUserByUsername(username);
+            String userId = "";
+            if (opt.isPresent()) {
+                User user = opt.get();
+                userId = user.getUserId();
             }
 
+            List<Task> taskList = Task.createTaskList(num, taskMap, userId);
+
+            bUpserted = todoSvc.upsertTask(taskList, username);
         }
-        try{
-            todoService.upsertTask(username, taskList);
-        } catch(Exception e){
-            ModelAndView mav = new ModelAndView("error");
-            mav.setStatus(HttpStatusCode.valueOf(500));
-            return mav;
+
+        if (bUpserted || bContinue) {
+            Map<String, String> models = new HashMap<>();
+            models.put("taskCount", String.valueOf(num));
+            models.put("username", username);
+            return new ModelAndView("result.html", models, HttpStatus.valueOf(200));
+        } else {
+            return new ModelAndView("error.html", HttpStatus.valueOf(500));
         }
-        
-
-        ModelAndView mav = new ModelAndView("result");
-
-        mav.setStatus(HttpStatusCode.valueOf(200));
-        mav.addObject("taskCount", taskList.size());
-        mav.addObject("username", username);
-
-        return mav;
-        
     }
-    
 }

@@ -1,7 +1,6 @@
 package ibf2022.paf.assessment.server.services;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -18,47 +17,35 @@ import ibf2022.paf.assessment.server.repositories.UserRepository;
 public class TodoService {
 
     @Autowired
-    UserRepository userRepo;
+    private TaskRepository taskRepo;
 
     @Autowired
-    TaskRepository taskRepo;
+    private UserRepository userRepo;
 
     @Transactional
-    public void upsertTask(String username, List<Task> taskList){
+    public Boolean upsertTask(List<Task> taskList, String username) {
 
-        Optional<User> result = userRepo.findUserByUsername(username);
-    
+        Boolean bUpserted = false;
 
-		if(result.isEmpty()){
-			System.out.println("User not found, creating user");
-            
-            //create new user
-            User newUser = new User();
-            newUser.setUsername(username);
-            newUser.setName(username.toUpperCase());
-            String newUserId = userRepo.insertUser(newUser);
-            
-            //add tasks
-            for(Task task: taskList){
-                System.out.println(task + newUserId);
-                taskRepo.insertTask(task, newUserId);
+        User user = new User();
+        String userId = taskList.get(0).getUserId();
+        if (userId.isEmpty()) {
+            user.setUsername(username);
+            user.setName(username.substring(0,1).toUpperCase() + username.substring(1));
+            userId = userRepo.insertUser(user);
+        }
+
+        for (Task task : taskList) {
+            task.setUserId(userId);
+            Integer n = taskRepo.insertTask(task);
+            if (n > 0) {
+                bUpserted = true;
+            } else {
+                bUpserted = false;
+                break;
             }
+        }
 
-		} else{
-			System.out.println(result.get());
-            User foundUser = result.get();
-            String userId = foundUser.getUserId();
-
-            //add tasks
-            for(Task task: taskList){
-                System.out.println(task + userId);
-                taskRepo.insertTask(task, userId);
-            }
-		}
-        
-
-
+        return bUpserted;
     }
-
 }
-
